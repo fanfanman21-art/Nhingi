@@ -1,0 +1,255 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+    Name = "Combat :))",
+    LoadingTitle = "Loading...",
+    LoadingSubtitle = "của thịnh",
+    ConfigurationSaving = { Enabled = true, FolderName = "LockOnConfig", FileName = "Settings" },
+    KeySystem = false,
+})
+
+-- ==================== MAIN TAB ====================
+local MainTab = Window:CreateTab("Main", 4483362458)
+
+-- Variables
+local SelectedPlayer = nil
+local TargetCharacter = nil
+local AutoDistanceEnabled = true
+local DesiredDistance = 51
+local ESPEnabled = false
+local Blacklist = {}
+
+local PlayerOptions = {}
+local BlacklistOptions = {}
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+
+local function UpdatePlayerLists()
+    PlayerOptions = {}
+    BlacklistOptions = {}
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local text = player.DisplayName .. " (" .. player.Name .. ")"
+            table.insert(PlayerOptions, text)
+            table.insert(BlacklistOptions, text)
+        end
+    end
+end
+UpdatePlayerLists()
+
+-- ==================== LOCK ON SECTION ====================
+MainTab:CreateSection("🎯 Lock On")
+
+local TargetDropdown = MainTab:CreateDropdown({
+    Name = "Chọn Người Chơi Lock On",
+    Options = PlayerOptions,
+    CurrentOption = {},
+    Callback = function(CurrentOption)
+        if #CurrentOption > 0 then
+            local selectedText = CurrentOption[1]
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr.DisplayName .. " (" .. plr.Name .. ")" == selectedText then
+                    SelectedPlayer = plr
+                    Rayfield:Notify({Title = "Lock On", Content = "Đang nhắm: " .. plr.DisplayName, Duration = 3})
+                    break
+                end
+            end
+        end
+    end,
+})
+
+-- ==================== ESP SECTION (RIÊNG BIỆT) ====================
+MainTab:CreateSection("🔍 ESP Settings")
+
+local ESPToggle = MainTab:CreateToggle({
+    Name = "Bật / Tắt ESP",
+    CurrentValue = false,
+    Callback = function(Value)
+        ESPEnabled = Value
+        Rayfield:Notify({
+            Title = "ESP",
+            Content = Value and "✅ ESP đã BẬT" or "❌ ESP đã TẮT",
+            Duration = 3,
+        })
+    end,
+})
+
+local BlacklistDropdown = MainTab:CreateDropdown({
+    Name = "🚫 Blacklist ESP (Không hiển thị ESP)",
+    Options = BlacklistOptions,
+    CurrentOption = {},
+    MultiSelection = true,
+    Callback = function(CurrentOption)
+        Blacklist = {}
+        for _, text in ipairs(CurrentOption) do
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr.DisplayName .. " (" .. plr.Name .. ")" == text then
+                    table.insert(Blacklist, plr)
+                    break
+                end
+            end
+        end
+        Rayfield:Notify({Title = "Blacklist Updated", Content = "Đã loại " .. #CurrentOption .. " người khỏi ESP", Duration = 2})
+    end,
+})
+
+MainTab:CreateButton({
+    Name = "🔄 Refresh Danh Sách",
+    Callback = function()
+        UpdatePlayerLists()
+        TargetDropdown:Refresh(PlayerOptions)
+        BlacklistDropdown:Refresh(BlacklistOptions)
+    end,
+})
+
+-- ==================== AUTO DISTANCE SECTION ====================
+MainTab:CreateSection("📏 Auto Distance")
+
+MainTab:CreateToggle({
+    Name = "Auto Giữ Khoảng Cách",
+    CurrentValue = true,
+    Callback = function(Value)
+        AutoDistanceEnabled = Value
+    end,
+})
+
+MainTab:CreateSlider({
+    Name = "Khoảng Cách (Studs)",
+    Range = {30, 100},
+    Increment = 1,
+    CurrentValue = 51,
+    Callback = function(Value)
+        DesiredDistance = Value
+    end,
+})
+
+-- ==================== ESP FUNCTIONS ====================
+local ESPObjects = {}
+
+local function CreateESP(plr)
+    if not plr.Character or ESPObjects[plr] then return end
+    if table.find(Blacklist, plr) then return end
+
+    local char = plr.Character
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    local Billboard = Instance.new("BillboardGui")
+    Billboard.Adornee = root
+    Billboard.Size = UDim2.new(0, 220, 0, 70)
+    Billboard.StudsOffset = Vector3.new(0, 4, 0)
+    Billboard.AlwaysOnTop = true
+    Billboard.Parent = root
+
+    local TextLabel = Instance.new("TextLabel")
+    TextLabel.Size = UDim2.new(1, 0, 1, 0)
+    TextLabel.BackgroundTransparency = 0.3
+    TextLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    TextLabel.TextColor3 = Color3.new(1, 1, 1)
+    TextLabel.TextStrokeTransparency = 0
+    TextLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+    TextLabel.Font = Enum.Font.GothamBold
+    TextLabel.TextSize = 7.5
+    TextLabel.Parent = Billboard
+
+    ESPObjects[plr] = Billboard
+
+    task.spawn(function()
+        while ESPEnabled and ESPObjects[plr] and plr.Character and plr.Character:FindFirstChild("Humanoid") do
+            local hum = plr.Character.Humanoid
+            local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if hum and myRoot then
+                local distance = math.floor((myRoot.Position - root.Position).Magnitude)
+                local hpPercent = math.floor((hum.Health / hum.MaxHealth) * 100)
+                
+                TextLabel.Text = string.format("%s\n📍 %d studs\n❤️ %d%%", plr.DisplayName, distance, hpPercent)
+                
+                if hpPercent > 70 then
+                    TextLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
+                elseif hpPercent > 35 then
+                    TextLabel.TextColor3 = Color3.fromRGB(255, 220, 0)
+                else
+                    TextLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
+                end
+            end
+            task.wait(0.15)
+        end
+    end)
+end
+
+local function RemoveESP(plr)
+    if ESPObjects[plr] then
+        ESPObjects[plr]:Destroy()
+        ESPObjects[plr] = nil
+    end
+end
+
+-- ESP Manager
+task.spawn(function()
+    while true do
+        if ESPEnabled then
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr ~= LocalPlayer then
+                    if not table.find(Blacklist, plr) then
+                        CreateESP(plr)
+                    else
+                        RemoveESP(plr)
+                    end
+                end
+            end
+        else
+            for plr in pairs(ESPObjects) do
+                RemoveESP(plr)
+            end
+        end
+        task.wait(0.8)
+    end
+end)
+
+-- ==================== MAIN LOOPS ====================
+local function FireLockOn()
+    if not SelectedPlayer or not SelectedPlayer.Character then return end
+    TargetCharacter = SelectedPlayer.Character
+    pcall(function()
+        ReplicatedStorage.Packages._Index["sleitnick_knit@1.4.7"].knit.Services.SkillManager.RE.LockedOnChanged:FireServer(TargetCharacter)
+    end)
+end
+
+local function AutoKeepDistance()
+    if not AutoDistanceEnabled or not TargetCharacter then return end
+    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local targetRoot = TargetCharacter:FindFirstChild("HumanoidRootPart")
+    if root and targetRoot then
+        local dist = (root.Position - targetRoot.Position).Magnitude
+        if dist < DesiredDistance then
+            local dir = (root.Position - targetRoot.Position).Unit
+            local newPos = targetRoot.Position + dir * DesiredDistance
+            TweenService:Create(root, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {CFrame = CFrame.new(newPos, targetRoot.Position)}):Play()
+        end
+    end
+end
+
+task.spawn(function()
+    while true do
+        FireLockOn()
+        AutoKeepDistance()
+        task.wait(0.1)
+    end
+end)
+
+-- Auto refresh
+task.spawn(function()
+    while true do
+        task.wait(10)
+        UpdatePlayerLists()
+        pcall(function()
+            TargetDropdown:Refresh(PlayerOptions)
+            BlacklistDropdown:Refresh(BlacklistOptions)
+        end)
+    end
+end)
+
+Rayfield:Notify({Title = "Loaded Success", Content = "ESP có nút riêng + Blacklist Dropdown", Duration = 6})
