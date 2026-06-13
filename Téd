@@ -253,3 +253,61 @@ task.spawn(function()
 end)
 
 Rayfield:Notify({Title = "Loaded Success", Content = "ESP có nút riêng + Blacklist Dropdown", Duration = 6})
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local AutoRay = false
+local DetectDistance = 51
+
+Tab:CreateToggle({
+    Name = "Auto cái này nek",
+    CurrentValue = false,
+    Flag = "AutoRay",
+    Callback = function(Value)
+        AutoRay = Value
+    end,
+})
+
+task.spawn(function()
+    while task.wait(0.2) do
+        if not AutoRay then
+            continue
+        end
+
+        local Character = LocalPlayer.Character
+        local HRP = Character and Character:FindFirstChild("HumanoidRootPart")
+
+        if HRP then
+            for _,Player in ipairs(Players:GetPlayers()) do
+                if Player ~= LocalPlayer
+                and Player.Character
+                and Player.Character:FindFirstChild("HumanoidRootPart") then
+
+                    local EnemyHRP = Player.Character.HumanoidRootPart
+                    local Distance = (HRP.Position - EnemyHRP.Position).Magnitude
+
+                    if Distance <= DetectDistance then
+                        local args = {
+                            {
+                                Camera = workspace.CurrentCamera.CFrame,
+                                SkillId = "105",
+                                Began = true,
+                                CFrame = HRP.CFrame,
+                                ["Typе"] = 1,
+                                Aim = EnemyHRP.Position
+                            }
+                        }
+
+                        game:GetService("ReplicatedStorage")
+                            :WaitForChild("Remotes")
+                            :WaitForChild("SkillRemote")
+                            :FireServer(unpack(args))
+
+                        task.wait(1)
+                        break
+                    end
+                end
+            end
+        end
+    end
+end)
